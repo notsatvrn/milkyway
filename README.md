@@ -1,3 +1,3 @@
 # milkyway
 
-🌌 a powerful space themed botnet written in python
+`milkyway` is a powerful, space themed botnet written in python.
