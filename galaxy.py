@@ -51,8 +51,8 @@ def bind_port():
         try:
             galaxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             shell_socket = socket.socket()
-            galaxy_socket.bind(("127.0.0.1", galaxy_port))
-            shell_socket.bind(("127.0.0.1", shell_port))
+            galaxy_socket.bind(("0.0.0.0", galaxy_port))
+            shell_socket.bind(("0.0.0.0", shell_port))
             galaxy_socket.listen()
             shell_socket.listen()
             galaxy_socket.settimeout(0.5)
