@@ -4,11 +4,11 @@
 
 # import libraries
 import os
-import secrets
+from secrets import token_hex
 import socket
 import sys
-import threading
 import time
+from threading import Thread
 from signal import signal, SIGINT
 
 # get platform
@@ -75,7 +75,7 @@ def planet_handler():
             planet, addr = galaxy_socket.accept()
             planets.append(planet)
             planet_ips.append(addr)
-            planet_id = secrets.token_hex(10)
+            planet_id = token_hex(10)
             planet_ids.append(planet_id)
             planet.send(f"planet ID: {planet_id}".encode())
             print(type(planet))
@@ -259,7 +259,7 @@ galaxy_online = False
 
 # bind to port
 bind_port()
-threading.Thread(target=planet_handler).start()
+Thread(target=planet_handler).start()
 
 
 # main stuff

