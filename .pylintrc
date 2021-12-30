@@ -1,6 +1,6 @@
 [MASTER]
 disable=
-  C0114, # missing-module-docstring
-  C0115, # missing-class-docstring
-  C0116, # missing-function-docstring
-  C0103, # invalid-name
+  C0103, # invalid-name (false positive/can't do much about this)
+  W0212, # protected-access (can't do much about this)
+  R1723, # no-else-break (false positive)
+  R1705, # no-else-return (false positive)

