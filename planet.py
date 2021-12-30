@@ -223,7 +223,6 @@ def connection_handler():
                     shell(int(data.replace("shellcmd start bufsize ", "").strip()))
                 elif not data:
                     print("Having trouble connecting to galaxy, attempting to reconnect...")
-                    print(f"Error: {e}")
                     planet_online = False
                     connect_to_galaxy()
             except IOError as e:

