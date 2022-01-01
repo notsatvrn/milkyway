@@ -4,3 +4,4 @@ disable=
   W0212, # protected-access (can't do much about this)
   R1723, # no-else-break (false positive)
   R1705, # no-else-return (false positive)
+  R1724, # no-else-continue (false positive)
